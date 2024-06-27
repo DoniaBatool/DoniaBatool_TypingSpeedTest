@@ -1,296 +1,213 @@
 #! /usr/bin/env node
-
 import inquirer from "inquirer";
 import chalk from "chalk";
-import readline from 'readline';
+import * as readline from "readline";
 
-
-// const sentences:string[] = [
-//      "The quick brown fox jumps over the lazy dog",
-//      "The sun is shining brightly today.",
-//      "Technology is advancing at a rapid pace, transforming our daily lives.",
-//      "In the midst of chaos, there lies an opportunity for those who are prepared to seize it."
-// ];
-// const times: { [key: string]: number } = { 
-//     sample: 30000,
-//     Basic: 50000,
-//     Intermediate: 30000,
-//     Hard: 15000
-// };
-
-// console.log("WELCOME TO THE SPEED CLUB");
-
-// async function typingTest(duration: number): Promise<void> {
-//     const startTime = Date.now();
-//     let count = 0;
-//     let totalWords = 0;
-//     let correctWords = 0;
-//     let mistakes: { input: string }[] = [];
-
-//     const rl = readline.createInterface({
-//         input: process.stdin,
-//         output: process.stdout
-//     });
-
-//     const exp = sentences[Math.floor(Math.random() * sentences.length)];
-//     console.log(chalk.yellow(`Type the following sentence as many times as you can:\n${exp}`));
-
-//     return new Promise((resolve) => {
-//         const interval = setInterval(() => {
-//             const currentTime = Date.now();
-//             if (currentTime - startTime >= duration) {
-//                 clearInterval(interval);
-//                 rl.close();
-
-//     const durationMinutes = (Date.now() - startTime) / 60000;
-//     const wpm = totalWords / durationMinutes;
-//     const accuracy = (correctWords / totalWords) * 100;
-
-//     console.log(chalk.green(`Time's up! You attempted to type the sentence ${count} times.`));
-//     console.log(chalk.green(`Words per minute (WPM): ${wpm.toFixed(2)}`));
-//     console.log(chalk.green(`Accuracy: ${accuracy.toFixed(2)}%`));
-
-//         if (mistakes.length > 0) {
-//         console.log(chalk.red(`\nMistakes made:`));
-//         mistakes.forEach((mistake, index) => {
-//         console.log(chalk.red(`${index + 1}. Your input: "${highlightMistakes(mistake.input, exp)}"`));
-//         console.log(chalk.green(`   Correct: "${exp}"`));
-//                     });
-//          } else {
-//             console.log(chalk.green(`No mistakes made! Great job!`));
-//             }
-
-//          resolve(); // Resolve the promise when the test is done
-//             }
-//         }, 1000);
-
-//         rl.on('line', (input) => {
-//             if (Date.now() - startTime < duration) {
-//                 count++;
-//                 totalWords += input.split(' ').length;
-//                 if (input === exp) {
-//                     correctWords += input.split(' ').length;
-//                     console.log(chalk.green(`Correct!`));
-//                 } else {
-//                     mistakes.push({ input });
-//                     console.log(chalk.red(`Incorrect.`));
-//                 }
-//             }
-//         });
-//     });
-// }
-
-// function highlightMistakes(input: string, exp: string): string {
-//     const inputWords = input.split(' ');
-//     const expWords = exp.split(' ');
-
-//     return inputWords.map((word, index) => {
-//         if (word !== expWords[index]) {
-//             return chalk.red.underline(word);
-//         }
-//         return word;
-//     }).join(' ');
-// }
-
-// async function main() {
-//     while (true) {
-//         const ask = await inquirer.prompt({
-//             name: "selectedOption",
-//             type: "list",
-//             message: "Select an Option from the list",
-//             choices: ["Warm up Exercise (30 sec)", "Basic Level (50 sec)", "Intermediate Level (30 sec)", "Hard Level (15 sec)", "Exit"]
-//         });
-
-//         switch (ask.selectedOption) {
-//             case "Warm up Exercise (30 sec)":
-//                 await typingTest(times.sample);
-//                 break;
-//             case "Basic Level (50 sec)":
-//                 await typingTest(times.Basic);
-//                 break;
-//             case "Intermediate Level (30 sec)":
-//                 await typingTest(times.Intermediate);
-//                 break;
-//             case "Hard Level (15 sec)":
-//                 await typingTest(times.Hard);
-//                 break;
-//             case "Exit":
-//                 console.log("Exiting...");
-//                 return; // Exit the loop and the function
-//             default:
-//                 console.log(chalk.red("Invalid option selected."));
-//                 break;
-//         }
-//     }
-// }
-
-// main();
-const sentences: string[] = [
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+});
+let currentInput = ''; // Current user input
+let timer = null; // Timer for the typing test
+let startTime: number | null = null; // Start time of the typing test
+let correctWords = 0;
+let wrongWordsInSentence: string[] = [];
+let totalCompletedSentences = 0;
+let time = {
+    simple: 30000,//30 sec
+    Basic: 60000,// 60 sec
+    Intermediate: 40000,// 40 sec
+    Hard: 30000,// 30 sec
+}
+const sentences = [
     "The quick brown fox jumps over the lazy dog",
     "The sun is shining brightly today.",
     "Technology is advancing at a rapid pace, transforming our daily lives.",
     "In the midst of chaos, there lies an opportunity for those who are prepared to seize it."
 ];
+let sentenceShown = generateRandomSentences();
 
-const times: { [key: string]: number } = {
-    sample: 30000,
-    Basic: 50000,
-    Intermediate: 30000,
-    Hard: 15000
-};
+// Function to render the current state
+function render() {
+    readline.cursorTo(process.stdout, 0, 0); // Move cursor to top-left corner
+    readline.clearScreenDown(process.stdout); // Clear screen from cursor down
 
-console.log("WELCOME TO THE SPEED CLUB");
+    console.log(chalk.yellow('Type the following sentence (press Enter to start typing):'));
+    console.log(chalk.green(sentenceShown)); // Display the current sentence
+    console.log(chalk.yellow('Current user input:'));
 
-async function typingTest(exp: string, duration: number): Promise<void> {
-    const startTime = Date.now();
-    let totalWords = 0;
-    let correctWords = 0;
-    let wrongWords = 0;
-    let completeCorrectSentences = 0;
-    let mistakes: { input: string, correct: string }[] = [];
-    let lastInput = '';
+    // Split expected and actual words
+    const expectedWords = sentenceShown.trim().split(' ');
+    const actualWords = currentInput.trim().split(' ');
 
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
+    // Compare words and apply styling
+    let output = '';
+    for (let i = 0; i < expectedWords.length; i++) {
+        if (i < actualWords.length) {
+            if (expectedWords[i] === actualWords[i]) {
+                output += chalk.green(actualWords[i] + ' ');
+            } else {
+                output += chalk.red(actualWords[i] + ' ');
+            }
+        }
+    }
 
-    console.log(chalk.yellow(`Type the following sentence as many times as you can:\n${exp}`));
+    console.log(output); // Display current input with styling
+}
 
-    return new Promise((resolve) => {
-        const interval = setInterval(() => {
-            const currentTime = Date.now();
-            if (currentTime - startTime >= duration) {
-                clearInterval(interval);
-                rl.close();
+// Function to handle starting the typing test
+function startTypingTest(duration: number | undefined) {
+    startTime = Date.now(); // Record the start time
+    timer = setTimeout(endTypingTest, duration); // Set timer for typing test
+    process.stdin.setRawMode(true); // Enable raw mode to capture each keypress
+    process.stdin.resume();
 
-                // Process the last input if it exists
-                if (lastInput) {
-                    const { correct, wrong, allCorrect } = analyzeInput(lastInput, exp);
-                    totalWords += correct + wrong;
-                    correctWords += correct;
-                    wrongWords += wrong;
-                    if (allCorrect && correct === exp.split(' ').length) {
-                        completeCorrectSentences++;
-                    }
-                    if (correct !== exp.split(' ').length || wrong > 0) {
-                        mistakes.push({ input: lastInput, correct: exp });
-                    }
-                }
-
-                const durationMinutes = (Date.now() - startTime) / 60000;
-                const wpm = totalWords / durationMinutes;
-                const accuracy = totalWords > 0 ? (correctWords / totalWords) * 100 : 0;
-
-                console.log(chalk.green(`Time's up!`));
-                console.log(chalk.green(`Words per minute (WPM): ${wpm.toFixed(2)}`));
-                console.log(chalk.green(`Total words typed: ${totalWords}`));
-                console.log(chalk.green(`Correct words typed: ${correctWords}`));
-                console.log(chalk.green(`Wrong words: ${wrongWords}`));
-                console.log(chalk.green(`Complete correct sentences: ${completeCorrectSentences}`));
-                console.log(chalk.green(`Accuracy: ${accuracy.toFixed(2)}%`));
-
-                if (mistakes.length > 0) {
-                    console.log(chalk.red(`\nMistakes made:`));
-                    mistakes.forEach((mistake, index) => {
-                        console.log(chalk.red(`${index + 1}. Your input: "${highlightMistakes(mistake.input, exp)}"`));
-                        console.log(chalk.green(`   Correct: "${exp}"`));
-                    });
+    // Event listener for keypress
+    process.stdin.on('keypress', (_, key) => {
+        if (key) {
+            if (key.name === 'return') {
+                // User pressed Enter
+                analyzeInput(sentenceShown, currentInput);
+                if (currentInput.trim() === sentenceShown.trim()) {
+                    // Completed the current sentence correctly
+                    currentInput = ''; // Clear current input
+                    sentenceShown = generateRandomSentences(); // Generate new sentence
+                    totalCompletedSentences++; // Increment completed sentences count
                 } else {
-                    console.log(chalk.green(`No mistakes made! Great job!`));
+                    currentInput += '\n'; // Start a new line
                 }
-
-                resolve(); // Resolve the promise when the test is done
+                render(); // Render updated screen
+            } else if (key.name === 'backspace') {
+                currentInput = currentInput.slice(0, -1); // Handle backspace
+                render(); // Render updated screen
+            } else {
+                currentInput += key.sequence; // Add character to currentInput
+                render(); // Render updated screen
             }
-        }, 1000);
-
-        rl.on('line', (input) => {
-            if (Date.now() - startTime < duration) {
-                lastInput = input; // Store the last input
-                const { correct, wrong, allCorrect } = analyzeInput(input, exp);
-                totalWords += correct + wrong;
-                correctWords += correct;
-                wrongWords += wrong;
-                if (allCorrect && correct === exp.split(' ').length) {
-                    completeCorrectSentences++;
-                }
-                if (correct !== exp.split(' ').length || wrong > 0) {
-                    mistakes.push({ input, correct: exp });
-                }
-                lastInput = ''; // Reset lastInput after processing
-            }
-        });
-    });
-}
-
-function analyzeInput(input: string, exp: string): { correct: number, wrong: number, allCorrect: boolean } {
-    const inputWords = input.trim().split(/\s+/);
-    const expWords = exp.split(' ');
-
-    let correct = 0;
-    let wrong = 0;
-    let allCorrect = true;
-
-    inputWords.forEach((word, index) => {
-        if (index < expWords.length && word === expWords[index]) {
-            correct++;
-        } else if (index < expWords.length) {
-            wrong++;
-            allCorrect = false;
-        } else {
-            wrong++;
         }
     });
 
-    return { correct, wrong, allCorrect };
+    // Initial render
+    render();
 }
 
-function highlightMistakes(input: string, exp: string): string {
-    const inputWords = input.split(' ');
-    const expWords = exp.split(' ');
+// Function to analyze user input
+function analyzeInput(expected: string, actual: string) {
+    const expectedWords = expected.trim().split(' ');
+    const actualWords = actual.trim().split(' ');
 
-    return inputWords.map((word, index) => {
-        if (word !== expWords[index]) {
-            return chalk.red.underline(word);
-        }
-        return word;
-    }).join(' ');
-}
+    correctWords = 0;
+    wrongWordsInSentence = []; // Reset wrong words in sentence
 
-async function main() {
-    while (true) {
-        const ask = await inquirer.prompt({
-            name: "selectedOption",
-            type: "list",
-            message: "Select an Option from the list",
-            choices: ["Warm up Exercise (30 sec)", "Basic Level (50 sec)", "Intermediate Level (30 sec)", "Hard Level (15 sec)", "Exit"]
-        });
-
-        switch (ask.selectedOption) {
-            case "Warm up Exercise (30 sec)":
-                await typingTest(getRandomSentence(), times.sample);
-                break;
-            case "Basic Level (50 sec)":
-                await typingTest(getRandomSentence(), times.Basic);
-                break;
-            case "Intermediate Level (30 sec)":
-                await typingTest(getRandomSentence(), times.Intermediate);
-                break;
-            case "Hard Level (15 sec)":
-                await typingTest(getRandomSentence(), times.Hard);
-                break;
-            case "Exit":
-                console.log("Exiting...");
-                return; // Exit the loop and the function
-            default:
-                console.log(chalk.red("Invalid option selected."));
-                break;
+    for (let i = 0; i < expectedWords.length; i++) {
+        if (i < actualWords.length) {
+            if (expectedWords[i] === actualWords[i]) {
+                correctWords++;
+            } else {
+                wrongWordsInSentence.push(actualWords[i]); // Add wrong word to the array
+            }
         }
     }
 }
 
-function getRandomSentence(): string {
+// Function to end the typing test
+function endTypingTest() {
+    process.stdin.removeAllListeners('keypress'); // Remove keypress listeners
+    process.stdin.setRawMode(false); // Disable raw mode
+    process.stdin.pause();
+
+    if (startTime !== null) {
+        // Calculate elapsed time
+        const elapsedTime = (Date.now() - startTime) / 1000; // in seconds
+        const typingSpeed = (currentInput.trim().split(' ').length / elapsedTime) * 60; // words per minute
+
+        // Analyze user input
+        analyzeInput(sentenceShown, currentInput);
+
+        // Display results
+        console.log(chalk.yellow('Typing test completed!'));
+        console.log(chalk.green(`Typing speed: ${typingSpeed.toFixed(2)} words per minute`));
+        console.log(chalk.green(`Correct words: ${correctWords}`));
+        console.log(chalk.green(`Accuracy: ${(correctWords / sentenceShown.split(' ').length * 100).toFixed(2)}%`));
+        console.log(chalk.green(`Total Completed Sentences: ${totalCompletedSentences}`));
+
+        if (wrongWordsInSentence.length > 0) {
+            // Display wrong words underlined in red
+            const underlinedWrongWords = wrongWordsInSentence.map(word => chalk.red.underline(word)).join(', ');
+            console.log(chalk.red('Wrong Words in the sentence: ' + underlinedWrongWords));
+
+            // Display the correct sentence
+            console.log(chalk.blue('Correct sentence: ' + sentenceShown));
+        } else {
+            console.log(chalk.green('No mistakes made!'));
+        }
+    } else {
+        console.log(chalk.red('Error: Typing test ended before it started.'));
+    }
+
+    // Reset variables for next test
+    currentInput = '';
+    sentenceShown = generateRandomSentences(); // Generate new random sentence
+
+    // Prompt user to start a new test
+    console.log(""); // Add a blank line for spacing
+    inquirer.prompt({
+        name: "startNewTest",
+        type: "list",
+        message: "Do you want to start a new typing test?",
+        choices: ["Yes", "No"]
+    }).then(answer => {
+        if (answer.startNewTest === "Yes") {
+            startMenu(); // Restart the menu to allow selection
+        } else {
+            console.log(chalk.yellow('Exiting...'));
+            process.exit(0); // Exit the process
+        }
+    });
+}
+
+// Function to generate a random sentence from the sentences array
+function generateRandomSentences() {
     return sentences[Math.floor(Math.random() * sentences.length)];
 }
 
-main();
+// Function to display the start menu
+function startMenu() {
+    console.log(""); // Add a blank line for spacing
+    inquirer.prompt({
+        name: "selectedOption",
+        type: "list",
+        message: "Select an Option from the list",
+        choices: ["Warm up Exercise (30 sec)", "Basic Level (60 sec)", "Intermediate Level (40 sec)", "Hard Level (30 sec)", "Exit"]
+    }).then(answer => {
+        switch (answer.selectedOption) {
+            case "Warm up Exercise (30 sec)":
+                startTypingTest(time.simple);
+                break;
+            case "Basic Level (60 sec)":
+                startTypingTest(time.Basic);
+                break;
+            case "Intermediate Level (40 sec)":
+                startTypingTest(time.Intermediate);
+                break;
+            case "Hard Level (30 sec)":
+                startTypingTest(time.Hard);
+                break;
+            case "Exit":
+                console.log(chalk.yellow('Exiting...'));
+                process.exit(0); // Exit the process
+            default:
+                console.log(chalk.red("Invalid option selected."));
+                break;
+        }
+    });
+}
+
+// Start the application
+startMenu();
+
+// Clean up on exit
+rl.on('close', () => {
+    console.log(chalk.yellow('Exiting...'));
+    process.exit(0);
+});
